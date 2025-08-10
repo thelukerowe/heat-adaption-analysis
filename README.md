@@ -1,6 +1,6 @@
 # Heat Adaptation Analysis
 
-🔥 A comprehensive machine learning-enhanced tool for analyzing and predicting heat adaptation in endurance running performance.
+A comprehensive machine learning-enhanced tool for analyzing and predicting heat adaptation in endurance running performance.
 
 ## Overview
 
