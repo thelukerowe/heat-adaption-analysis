@@ -94,7 +94,7 @@ The system automatically selects the best model based on data availability:
 
 HSS combines multiple factors into a single metric:
 - Temperature and humidity (with interaction effects)
-- Running pace relative to personal record
+- Running pace relative to one-mile personal best
 - Heart rate as percentage of maximum
 - Distance scaling factor
 
