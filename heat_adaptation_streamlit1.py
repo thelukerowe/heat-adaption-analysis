@@ -246,8 +246,8 @@ class HeatAdaptationMLModel:
                     'rmse': np.sqrt(mse)
                 }
                 
-            except Exception as e:
-                st.error(f"Error reading CSV file: {str(e)}")
+        else:
+            st.error(f"Error reading CSV file: {str(e)}")
     
     # Analysis section - only show if we have data
     if len(st.session_state.run_data) >= 2:
