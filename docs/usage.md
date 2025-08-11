@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-The Heat Adaptation Analysis package helps athletes analyze their heat adaptation progress and predict performance improvements. Here's how to get started:
+The Heat Adaptation Analysis package helps athletes analyze their heat adaptation progress and predict performance improvements.
 
 ### Basic Usage
 

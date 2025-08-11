@@ -4,7 +4,7 @@ A comprehensive machine learning-enhanced tool for analyzing and predicting heat
 
 ## Overview
 
-This tool analyzes your running performance in hot conditions and uses machine learning models to predict how much your performance will improve after proper heat adaptation training. It provides personalized training recommendations based on your current heat tolerance and adaptation potential.
+This tool analyzes running performance in hot conditions and uses machine learning models to predict how much your performance will improve after proper heat adaptation training. It provides personalized training recommendations based on your current heat tolerance and adaptation potential.
 
 ## Features
 
@@ -94,7 +94,7 @@ The system automatically selects the best model based on data availability:
 
 HSS combines multiple factors into a single metric:
 - Temperature and humidity (with interaction effects)
-- Running pace relative to personal record
+- Running pace relative to one-mile personal best
 - Heart rate as percentage of maximum
 - Distance scaling factor
 
