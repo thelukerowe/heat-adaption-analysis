@@ -902,10 +902,11 @@ def main():
                     baseline_hss = np.mean([run['raw_score'] for run in clean_run_data])
                     trend_slope = (predictions[-1] - predictions[0]) / len(predictions) if len(predictions) > 1 else 0
                     
-                    # Calculate improved adaptation potential
-                    improvement_pct, plateau_days_calc, debug_info = run_improved_analysis(run_data, ml_model, features_df, clean_run_data, outliers, threshold)
-                    # Override the sidebar plateau_days with calculated value
-                    plateau_days = plateau_days_calc
+                    # Temporary simple calculation to test
+baseline_hss = np.mean([run['raw_score'] for run in clean_run_data])
+improvement_pct = min(20, max(8, baseline_hss * 0.8))
+debug_info = None
+# Keep using sidebar plateau_days
                     
                     # Create adapted scenarios
                     adapted_same_runs = []
