@@ -87,7 +87,17 @@ def apply_physiological_limits(improvement_pct, max_improvement=25.0, debug_info
     return limited_improvement
 
 def normalize(value, min_val, max_val):
-    return max(0, min(1, (value - min_val) / (max_val - min_val)))
+    """Normalize value(s) to 0-1 range, handling both scalars and pandas Series"""
+    if max_val == min_val:
+        return 0.5 if np.isscalar(value) else np.full_like(value, 0.5, dtype=float)
+    
+    normalized = (value - min_val) / (max_val - min_val)
+    
+    if np.isscalar(normalized):
+        return max(0, min(1, normalized))
+    else:
+        # Handle pandas Series or numpy arrays
+        return np.clip(normalized, 0, 1)
 
 def scale_distance(distance, min_dist=1, max_dist=15):
     norm_dist = normalize(distance, min_dist, max_dist)
@@ -369,16 +379,22 @@ def create_ml_features(df):
         features_df['hss_trend'] = 0
         features_df['temp_trend'] = 0
     
-    # Performance stress indicators
+    # Performance stress indicators - Fixed to handle NaN values
+    temp_normalized = normalize(df['temp'].fillna(80), 60, 100)
+    humidity_normalized = normalize(df['humidity'].fillna(70), 40, 95)
+    
     features_df['environmental_stress'] = (
-        normalize(df['temp'], 60, 100) * 0.6 + 
-        normalize(df['humidity'], 40, 95) * 0.4
+        temp_normalized * 0.6 + 
+        humidity_normalized * 0.4
     )
     
     features_df['performance_stress'] = (
-        features_df['pace_vs_pr'] * 0.4 + 
-        features_df['hr_efficiency'] * 0.6
+        features_df['pace_vs_pr'].fillna(1.0) * 0.4 + 
+        features_df['hr_efficiency'].fillna(0.8) * 0.6
     )
+    
+    # Fill any remaining NaN values
+    features_df = features_df.fillna(0)
     
     return features_df
 
