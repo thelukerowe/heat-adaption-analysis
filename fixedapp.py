@@ -133,11 +133,11 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
         
         if pd.isna(avg_pace_sec) or avg_pace_sec == 0:
             print(f"ERROR: Invalid avg_pace_sec = {avg_pace_sec}")
-            raise ValueError(f"Invalid average pace: {avg_pace_sec}")
+            avg_pace_sec = mile_pr_sec * 1.2  # Default to 20% slower than PR
             
         pace_slowdown_factor = avg_pace_sec / mile_pr_sec
         
-        print(f"DEBUG: Avg pace = {avg_pace_sec//60}:{avg_pace_sec%60:02d} ({avg_pace_sec}s)")
+        print(f"DEBUG: Avg pace = {int(avg_pace_sec//60)}:{int(avg_pace_sec%60):02d} ({avg_pace_sec}s)")
         print(f"DEBUG: Slowdown factor = {pace_slowdown_factor:.2f}")
         
         # Determine heat adaptation status based on performance level expectations
@@ -282,7 +282,15 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
             'baseline_hss': baseline_hss if 'baseline_hss' in locals() else 10,
             'performance_level': performance_level,
             'mile_pr_display': mile_pr_display,
+            'mile_pr_sec': mile_pr_sec,
+            'avg_pace_sec': avg_pace_sec if 'avg_pace_sec' in locals() else mile_pr_sec * 1.2,
+            'pace_slowdown_factor': pace_slowdown_factor if 'pace_slowdown_factor' in locals() else 1.2,
             'heat_adaptation_status': 'unknown',
+            'base_adaptation_potential': 0.18,
+            'adaptation_multiplier': 1.0,
+            'hr_efficiency_factor': 1.0,
+            'env_factor': 1.0,
+            'avg_temp': 80,
             'error': str(e)
         }
 
@@ -305,7 +313,16 @@ def apply_physiological_limits_fixed_v2(improvement_pct, max_improvement=25.0, d
             st.write("**Runner Profile:**")
             st.write(f"• Performance Level: **{debug_info.get('performance_level', 'Unknown').replace('_', ' ').title()}**")
             st.write(f"• Mile PR: **{debug_info.get('mile_pr_display', 'Unknown')}**")
-            st.write(f"• Current Avg Pace: **{int(debug_info.get('avg_pace_sec', 0)//60)}:{int(debug_info.get('avg_pace_sec', 0)%60):02d}**")
+            
+            # Fix: Ensure avg_pace_sec is properly handled as int or float
+            avg_pace_sec = debug_info.get('avg_pace_sec', 0)
+            if avg_pace_sec and avg_pace_sec > 0:
+                pace_min = int(avg_pace_sec // 60)
+                pace_sec = int(avg_pace_sec % 60)
+                st.write(f"• Current Avg Pace: **{pace_min}:{pace_sec:02d}**")
+            else:
+                st.write(f"• Current Avg Pace: **0:00**")
+                
             st.write(f"• Pace Slowdown: **{debug_info.get('pace_slowdown_factor', 1):.2f}x**")
             st.write(f"• Heat Adaptation Status: **{debug_info.get('heat_adaptation_status', 'unknown').replace('_', ' ').title()}**")
         
@@ -959,12 +976,27 @@ def main():
     st.sidebar.header("📝 Setup & Configuration")
     
     # Initial setup - Check if we have a scenario mile PR to use
-    if 'scenario_mile_pr' in st.session_state:
-        default_mile_pr = st.session_state.scenario_mile_pr
-    else:
-        default_mile_pr = "7:30"
+    # Use session state for the mile PR value
+    if 'mile_pr_value' not in st.session_state:
+        st.session_state.mile_pr_value = "7:30"
     
-    mile_pr_str = st.sidebar.text_input("Mile PR Pace (MM:SS):", value=default_mile_pr, key="mile_pr_input", help="Enter your mile personal record pace")
+    # Update mile_pr_value if a scenario was just loaded
+    if 'scenario_mile_pr' in st.session_state:
+        st.session_state.mile_pr_value = st.session_state.scenario_mile_pr
+        # Clear the scenario_mile_pr so it doesn't keep overwriting
+        del st.session_state.scenario_mile_pr
+    
+    mile_pr_str = st.sidebar.text_input(
+        "Mile PR Pace (MM:SS):", 
+        value=st.session_state.mile_pr_value,
+        key="mile_pr_input",
+        help="Enter your mile personal record pace",
+        on_change=lambda: setattr(st.session_state, 'mile_pr_value', st.session_state.mile_pr_input)
+    )
+    
+    # Update the session state value
+    st.session_state.mile_pr_value = mile_pr_str
+    
     max_hr_global = st.sidebar.number_input("Max Heart Rate:", min_value=120, max_value=220, value=190, help="Your maximum heart rate")
     
     # Data input method
@@ -1001,8 +1033,9 @@ def main():
         
         # Load button in sidebar
         if st.sidebar.button(f"Load {scenario['name']}", key="load_scenario_btn"):
-            # Store the scenario's mile PR in session state
-            st.session_state.scenario_mile_pr = scenario['mile_pr']
+            # Update the mile PR value in session state
+            st.session_state.mile_pr_value = scenario['mile_pr']
+            st.session_state.scenario_mile_pr = scenario['mile_pr']  # This triggers the update
             st.session_state.run_data = []
             mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
             
@@ -1040,7 +1073,7 @@ def main():
             
             # Update the mile PR input to match the scenario
             st.success(f"✅ Loaded {scenario['name']} test data with {len(scenario['runs'])} runs!")
-            st.info(f"Mile PR set to: {scenario['mile_pr']} ({mile_pr_sec} seconds)")
+            st.info(f"Mile PR updated to: {scenario['mile_pr']} ({mile_pr_sec} seconds)")
             print(f"Session state now has {len(st.session_state.run_data)} runs")
             st.rerun()
     
