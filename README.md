@@ -100,7 +100,7 @@ HSS combines multiple factors into a single metric:
 
 ## To-do List
 - [x] Add test scenarios to Streamlit app
-- [ ] Clear individual runs that are manually added
+- [x] Clear individual runs that are manually added
 - [ ] Add XGBoost
 - [ ] Improve readability of final analysis visualization
 - [ ] Strava and Weather API integration
