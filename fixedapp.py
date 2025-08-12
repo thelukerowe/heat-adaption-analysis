@@ -105,14 +105,14 @@ def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_da
     Calculate heat adaptation improvement potential based on multiple factors
     """
     try:
-        baseline_hss = np.mean([run['raw_score'] for run in clean_run_data])
+        baseline_hss = np.mean(clean_run_data['raw_score'].tolist())
         
         # Factor 1: Baseline heat strain level (higher = more potential)
         # Normalize baseline HSS to 0-1 scale (assuming typical range 5-25)
         hss_factor = min(1.0, max(0.0, (baseline_hss - 5) / 20))
         
         # Factor 2: Performance variability in heat (higher variability = more potential)
-        hss_values = np.array([run['raw_score'] for run in clean_run_data])
+        hss_values = np.array(clean_run_data['raw_score'].tolist())
         if len(hss_values) > 1 and np.mean(hss_values) > 0:
             cv = np.std(hss_values) / np.mean(hss_values)  # coefficient of variation
             variability_factor = min(1.0, cv * 2)  # scale CV to reasonable range
@@ -174,7 +174,7 @@ def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_da
         if ml_model.is_trained:
             try:
                 predictions = ml_model.predict(features_df)
-                actual_values = np.array([run['raw_score'] for run in run_data])
+                actual_values = np.array(run_data['raw_score'].tolist())
                 residuals = actual_values - predictions
                 # Higher positive residuals = performing worse than expected = more potential
                 avg_residual = np.mean(residuals)
@@ -559,10 +559,10 @@ def create_visualization(run_data, dates, raw_scores_arr, adjusted_scores,
     current_markers = ['x' if outlier else 'o' for outlier in outliers]
     current_sizes = [80 if outlier else 60 for outlier in outliers]
 
-    for i, (date, score, color, marker, size) in enumerate(zip(dates, [run['raw_score'] for run in run_data], current_colors, current_markers, current_sizes)):
+    for i, (date, score, color, marker, size) in enumerate(zip(dates, run_data['raw_score'].tolist(), current_colors, current_markers, current_sizes)):
         plt.scatter(date, score, color=color, marker=marker, s=size, alpha=0.8, zorder=5)
 
-    plt.plot(dates, [run['raw_score'] for run in run_data], linestyle='-', color='blue', label='Current Raw HSS', linewidth=2, alpha=0.7)
+    plt.plot(dates, run_data['raw_score'].tolist(), linestyle='-', color='blue', label='Current Raw HSS', linewidth=2, alpha=0.7)
     plt.plot(dates, adjusted_scores, marker='x', linestyle='--', color='purple', label='Adjusted HSS', linewidth=1)
     plt.scatter(dates, adjusted_scores, color=adjusted_colors, s=100, alpha=0.7, label='Adjusted HSS Risk')
     plt.scatter(dates, relative_scores_list, color=relative_colors, s=100, alpha=0.5, edgecolors='k', marker='o', label='Relative HSS Risk')
@@ -857,7 +857,7 @@ def main():
                         features_df = create_ml_features(df)
                         
                         # Detect outliers
-                        raw_scores = [run['raw_score'] for run in run_data]
+                        raw_scores = run_data['raw_score'].tolist()
                         outliers = detect_outliers(raw_scores, method=outlier_method, threshold=outlier_threshold)
                         
                         # Filter out outliers for model training
@@ -869,7 +869,7 @@ def main():
                         model_performance = ml_model.train_models(clean_features_df)
                         
                         # Calculate baseline metrics
-                        threshold = estimate_threshold([run['raw_score'] for run in clean_run_data])
+                        threshold = estimate_threshold(clean_run_data['raw_score'].tolist())
                         
                         # Calculate adjusted scores and relative scores
                         for i, run in enumerate(run_data):
@@ -880,12 +880,12 @@ def main():
                         # ML predictions and adaptation modeling
                         if ml_model.is_trained:
                             predictions = ml_model.predict(features_df)
-                            residuals = np.array([run['raw_score'] for run in run_data]) - predictions
+                            residuals = np.array(run_data['raw_score'].tolist()) - predictions
                             model_used = "ML Model"
                         else:
                             # Fallback to statistical model
                             X = np.arange(len(run_data)).reshape(-1, 1)
-                            y = np.array([run['raw_score'] for run in clean_run_data])
+                            y = np.array(clean_run_data['raw_score'].tolist())
                             
                             if len(clean_run_data) >= 3:
                                 # Use statsmodels for trend analysis
@@ -893,19 +893,19 @@ def main():
                                 try:
                                     model = sm.OLS(y, X_sm).fit()
                                     predictions = model.predict(sm.add_constant(X))
-                                    residuals = np.array([run['raw_score'] for run in run_data]) - predictions
+                                    residuals = np.array(run_data['raw_score'].tolist()) - predictions
                                     model_used = "Statistical Model"
                                 except:
                                     predictions = np.full(len(run_data), np.mean(y))
-                                    residuals = np.array([run['raw_score'] for run in run_data]) - predictions
+                                    residuals = np.array(run_data['raw_score'].tolist()) - predictions
                                     model_used = "Simple Average"
                             else:
                                 predictions = np.full(len(run_data), np.mean(y))
-                                residuals = np.array([run['raw_score'] for run in run_data]) - predictions
+                                residuals = np.array(run_data['raw_score'].tolist()) - predictions
                                 model_used = "Simple Average"
                         
                         # Calculate improvement percentage
-                        baseline_hss = np.mean([run['raw_score'] for run in clean_run_data])
+                        baseline_hss = np.mean(clean_run_data['raw_score'].tolist())
                         trend_slope = (predictions[-1] - predictions[0]) / len(predictions) if len(predictions) > 1 else 0
                         
                         # Create adapted scenarios
