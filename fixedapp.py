@@ -1354,11 +1354,6 @@ if st.session_state.get('show_test_scenarios', False):
         # Hide test scenarios after loading and rerun
         st.session_state.show_test_scenarios = False
         st.rerun()
-            
-    except NameError:
-        st.error("🔧 Test scenarios function not found. Make sure () is defined in your code.")
-    except Exception as e:
-        st.error(f"Error loading test scenarios: {str(e)}")
     
     # Footer with information
     st.markdown("---")
