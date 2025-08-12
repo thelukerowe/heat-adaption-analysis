@@ -1015,9 +1015,9 @@ def main():
                             mime="text/csv"
                         )
                         
-                except Exception as e:
-                    st.error(f"Analysis failed: {str(e)}")
-                    st.error("Please check your data and try again.")
+                    except Exception as e:
+                        st.error(f"Analysis failed: {str(e)}")
+                        st.error("Please check your data and try again.")
                     
     elif st.session_state.run_data and len(st.session_state.run_data) == 1:
         st.info("Add at least one more run to perform analysis.")
