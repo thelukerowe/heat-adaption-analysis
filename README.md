@@ -98,6 +98,13 @@ HSS combines multiple factors into a single metric:
 - Heart rate as percentage of maximum
 - Distance scaling factor
 
+## To-do List
+- [ ] Add test scenarios to Streamlit app
+- [ ] Clear individual runs that are manually added
+- [ ] Add XGBoost
+- [ ] Improve readability of final analysis visualization
+- [ ] Strava and Weather API integration
+
 ## Contributing
 
 1. Fork the repository
@@ -116,7 +123,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 If you use this tool in research, please cite:
 ```
-Heat Adaptation Analysis Tool (2024)
+Heat Adaptation Analysis Tool (2025)
 https://github.com/yourusername/heat-adaptation-analysis
 ```
 
