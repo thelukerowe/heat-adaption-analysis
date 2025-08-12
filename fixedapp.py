@@ -225,7 +225,25 @@ def calculate_adaptation_days(improvement_pct, run_data):
                 days += 2  # Infrequent runners adapt slower
     
     return max(7, min(21, days))
-
+    
+# Replace the analysis section in your main() function with this:
+def run_improved_analysis(run_data, ml_model, features_df, clean_run_data, outliers, threshold):
+    """
+    Improved analysis with better adaptation potential calculation
+    """
+    # Calculate improvement potential using the new method
+    improvement_pct, debug_info = calculate_adaptation_potential(
+        run_data, features_df, ml_model, clean_run_data
+    )
+    
+    # Calculate adaptation days
+    plateau_days = calculate_adaptation_days(improvement_pct, clean_run_data)
+    
+    # Apply physiological limits with debug info
+    improvement_pct = apply_physiological_limits(improvement_pct, debug_info=debug_info)
+    
+    return improvement_pct, plateau_days, debug_info
+    
 def heat_score(temp, humidity, pace_sec_per_mile, avg_hr, max_hr, distance, multiplier=1.0):
     T_norm = normalize(temp, 20, 110)
     H_norm = normalize(humidity, 20, 99)
