@@ -1127,9 +1127,11 @@ def main():
         if st.session_state.run_data:
             st.subheader(f"📋 Current Runs ({len(st.session_state.run_data)} total)")
             
+            # Create a DataFrame for display with index
             display_data = []
             for i, run in enumerate(st.session_state.run_data):
                 display_data.append({
+                    'Index': i,
                     'Date': run['date'].strftime('%Y-%m-%d'),
                     'Temp (°F)': run['temp'],
                     'Humidity (%)': run['humidity'],
@@ -1140,11 +1142,44 @@ def main():
                 })
             
             df_display = pd.DataFrame(display_data)
-            st.dataframe(df_display, use_container_width=True)
             
+            # Display the dataframe without the index column for cleaner look
+            st.dataframe(df_display.drop('Index', axis=1), use_container_width=True)
+            
+            # Add remove run functionality
+            st.subheader("🗑️ Remove a Run")
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                if len(st.session_state.run_data) > 0:
+                    # Create options for the selectbox
+                    run_options = [
+                        f"Run {i+1}: {run['date'].strftime('%Y-%m-%d')} - "
+                        f"{run['temp']}°F, Pace: {run['pace_sec']//60}:{run['pace_sec']%60:02d}, "
+                        f"HSS: {run['raw_score']:.1f}"
+                        for i, run in enumerate(st.session_state.run_data)
+                    ]
+                    
+                    selected_run = st.selectbox(
+                        "Select run to remove:",
+                        options=range(len(run_options)),
+                        format_func=lambda x: run_options[x],
+                        key="run_to_remove"
+                    )
+            
+            with col2:
+                if st.button("🗑️ Remove Selected Run", type="secondary"):
+                    if selected_run is not None:
+                        removed_run = st.session_state.run_data.pop(selected_run)
+                        st.success(f"✅ Removed run from {removed_run['date'].strftime('%Y-%m-%d')}")
+                        st.rerun()
+            
+            # Clear all runs button
             if st.button("Clear All Runs", type="secondary"):
-                st.session_state.run_data = []
-                st.rerun()
+                if st.checkbox("⚠️ Confirm: Delete all runs"):
+                    st.session_state.run_data = []
+                    st.success("All runs cleared!")
+                    st.rerun()
     
     # CSV upload section
     elif input_method == "CSV Upload":
