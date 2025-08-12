@@ -1338,7 +1338,7 @@ if st.session_state.get('show_test_scenarios', False):
                 'humidity': run_data['humidity'],
                 'pace_sec': pace_sec,
                 'avg_hr': run_data['hr'],
-                'max_hr': max_hr_global,
+                'max_hr': 190,
                 'distance': 3.1,
                 'raw_score': raw_score,
                 'adjusted_score': None,
