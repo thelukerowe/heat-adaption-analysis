@@ -55,7 +55,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- All your original functions (fixing the DataFrame/list issues) ---
+# --- FIXED FUNCTIONS ---
 
 def apply_physiological_limits(improvement_pct, max_improvement=25.0, debug_info=None):
     """Apply realistic physiological limits to heat adaptation improvement with better messaging"""
@@ -87,7 +87,7 @@ def apply_physiological_limits(improvement_pct, max_improvement=25.0, debug_info
     return limited_improvement
 
 def normalize(value, min_val, max_val):
-    return (value - min_val) / (max_val - min_val)
+    return max(0, min(1, (value - min_val) / (max_val - min_val)))
 
 def scale_distance(distance, min_dist=1, max_dist=15):
     norm_dist = normalize(distance, min_dist, max_dist)
@@ -104,8 +104,7 @@ def pace_to_seconds(pace_str):
         
 def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_run_data_list):
     """
-    Calculate heat adaptation improvement potential based on multiple factors
-    Fixed to handle list data properly
+    FIXED: Calculate heat adaptation improvement potential based on multiple factors
     """
     try:
         # Convert to DataFrame if needed
@@ -116,36 +115,47 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
             
         baseline_hss = clean_run_data_df['raw_score'].mean()
         
-        # Factor 1: Baseline heat strain level (higher = more potential)
-        # Normalize baseline HSS to 0-1 scale (assuming typical range 5-25)
-        hss_factor = min(1.0, max(0.0, (baseline_hss - 5) / 20))
+        # FIXED Factor 1: Baseline heat strain level 
+        # Higher HSS = MORE stress = MORE adaptation potential
+        # Scale: 5-10 = low stress (low potential), 15-25 = high stress (high potential)
+        if baseline_hss <= 8:
+            hss_factor = 0.1  # Very low stress = minimal potential
+        elif baseline_hss <= 12:
+            hss_factor = 0.3  # Moderate stress = some potential
+        elif baseline_hss <= 18:
+            hss_factor = 0.7  # High stress = good potential
+        else:
+            hss_factor = 1.0  # Very high stress = maximum potential
         
         # Factor 2: Performance variability in heat (higher variability = more potential)
         hss_values = clean_run_data_df['raw_score'].values
         if len(hss_values) > 1 and np.mean(hss_values) > 0:
             cv = np.std(hss_values) / np.mean(hss_values)  # coefficient of variation
-            variability_factor = min(1.0, cv * 2)  # scale CV to reasonable range
+            variability_factor = min(1.0, cv * 3)  # Scale CV appropriately
         else:
             variability_factor = 0.5
         
-        # Factor 3: Temperature exposure history
+        # FIXED Factor 3: Temperature exposure history
         temps = clean_run_data_df['temp'].dropna().values
         if len(temps) > 0:
             avg_temp = np.mean(temps)
             temp_range = max(temps) - min(temps) if len(temps) > 1 else 0
             
-            # Less exposure to high temps = more potential
-            temp_factor = 0.0
-            if avg_temp < 75:
-                temp_factor = 0.8  # Cool weather runner
-            elif avg_temp < 85:
-                temp_factor = 0.5  # Moderate exposure
+            # FIXED: Less exposure to high temps = MORE potential (inverted logic)
+            if avg_temp < 70:
+                temp_factor = 1.0  # Cool weather runner = high potential
+            elif avg_temp < 80:
+                temp_factor = 0.7  # Moderate exposure = good potential
+            elif avg_temp < 90:
+                temp_factor = 0.4  # Some heat exposure = moderate potential
             else:
-                temp_factor = 0.2  # Already heat exposed
+                temp_factor = 0.1  # Lots of heat exposure = low potential
             
-            # Bonus for limited temperature range (less heat experience)
-            if temp_range < 15:
-                temp_factor += 0.2
+            # FIXED: Limited temperature range = less heat experience = MORE potential
+            if temp_range < 10:
+                temp_factor += 0.2  # Very limited range
+            elif temp_range < 20:
+                temp_factor += 0.1  # Somewhat limited range
             
             temp_factor = min(1.0, temp_factor)
         else:
@@ -153,7 +163,7 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
             temp_range = 0
             temp_factor = 0.5
         
-        # Factor 4: Heart rate efficiency (higher HR at given pace = more potential)
+        # FIXED Factor 4: Heart rate efficiency 
         hr_efficiencies = []
         for _, run in clean_run_data_df.iterrows():
             try:
@@ -161,21 +171,23 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
                     pd.notna(run.get('avg_hr')) and pd.notna(run.get('max_hr')) and
                     run['pace_sec'] > 0 and run['mile_pr_sec'] > 0 and run['max_hr'] > 0):
                     
-                    pace_ratio = run['pace_sec'] / run['mile_pr_sec']
-                    hr_ratio = run['avg_hr'] / run['max_hr']
-                    # Higher HR relative to pace suggests poor heat efficiency
-                    if pace_ratio > 0:
-                        hr_efficiency = hr_ratio / pace_ratio
-                        hr_efficiencies.append(hr_efficiency)
+                    # FIXED: Calculate pace slowdown factor
+                    pace_slowdown = run['pace_sec'] / run['mile_pr_sec']  # >1 means slower than PR
+                    hr_percentage = run['avg_hr'] / run['max_hr']  # % of max HR used
+                    
+                    # If running much slower than PR but HR is still high = inefficient = more potential
+                    if pace_slowdown > 1.0:  # Running slower than PR
+                        inefficiency_score = hr_percentage / (1.0 / pace_slowdown)  # High = inefficient
+                        hr_efficiencies.append(inefficiency_score)
             except (TypeError, ZeroDivisionError):
                 continue
         
         if len(hr_efficiencies) > 0:
-            avg_hr_efficiency = np.mean(hr_efficiencies)
-            # Normalize to 0-1 scale (higher = less efficient = more potential)
-            hr_factor = min(1.0, max(0.0, (avg_hr_efficiency - 0.7) / 0.4))
+            avg_hr_inefficiency = np.mean(hr_efficiencies)
+            # Higher inefficiency = more adaptation potential
+            hr_factor = min(1.0, max(0.0, (avg_hr_inefficiency - 0.5) / 1.0))
         else:
-            avg_hr_efficiency = 0.8
+            avg_hr_inefficiency = 0.8
             hr_factor = 0.3
         
         # Factor 5: ML model residuals (if available)
@@ -187,27 +199,32 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
                 residuals = actual_values - predictions[:len(actual_values)]
                 # Higher positive residuals = performing worse than expected = more potential
                 avg_residual = np.mean(residuals)
-                residual_std = np.std(residuals)
+                residual_std = np.std(residuals) if len(residuals) > 1 else 1.0
+                
                 if residual_std > 0:
-                    ml_factor = min(1.0, max(0.0, (avg_residual + 2*residual_std) / (4*residual_std)))
+                    # Normalize residual score
+                    ml_factor = min(1.0, max(0.0, (avg_residual + residual_std) / (2 * residual_std)))
             except:
                 pass
         
-        # Combine factors with weights
+        # FIXED: Combine factors with adjusted weights
         combined_score = (
-            hss_factor * 0.30 +      # Baseline stress level
-            variability_factor * 0.20 +  # Performance inconsistency
-            temp_factor * 0.25 +     # Temperature exposure history
-            hr_factor * 0.15 +       # Heart rate efficiency
-            ml_factor * 0.10         # ML model insights
+            hss_factor * 0.40 +           # Baseline stress level (most important)
+            temp_factor * 0.30 +          # Temperature exposure history  
+            hr_factor * 0.15 +            # Heart rate efficiency
+            variability_factor * 0.10 +   # Performance inconsistency
+            ml_factor * 0.05              # ML model insights
         )
         
-        # Convert to improvement percentage (5-25% range)
-        improvement_pct = 5 + (combined_score * 20)
+        # FIXED: Convert to improvement percentage with better scaling
+        # Range: 3-25% based on combined score
+        improvement_pct = 3 + (combined_score * 22)
         
-        # Additional logic for extreme cases
+        # FIXED: Additional logic for extreme cases
         if baseline_hss > 20:
-            improvement_pct = max(improvement_pct, 15)  # High stress = at least 15%
+            improvement_pct = max(improvement_pct, 18)  # Very high stress = at least 18%
+        elif baseline_hss > 15:
+            improvement_pct = max(improvement_pct, 12)  # High stress = at least 12%
         elif baseline_hss < 8:
             improvement_pct = min(improvement_pct, 8)   # Low stress = max 8%
         
@@ -221,7 +238,7 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
             'combined_score': combined_score,
             'avg_temp': avg_temp,
             'temp_range': temp_range,
-            'avg_hr_efficiency': avg_hr_efficiency
+            'avg_hr_efficiency': avg_hr_inefficiency
         }
         
     except Exception as e:
@@ -231,7 +248,16 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
             baseline_hss = np.mean([run.get('raw_score', 10) for run in clean_run_data_list])
         else:
             baseline_hss = clean_run_data_list['raw_score'].mean()
-        improvement_pct = min(20, max(8, baseline_hss * 0.8))
+        
+        # FIXED: Simple fallback based on HSS level
+        if baseline_hss > 18:
+            improvement_pct = 20
+        elif baseline_hss > 12:
+            improvement_pct = 15
+        elif baseline_hss > 8:
+            improvement_pct = 10
+        else:
+            improvement_pct = 5
         
         return improvement_pct, {
             'baseline_hss': baseline_hss,
@@ -248,19 +274,19 @@ def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_r
 
 def calculate_adaptation_days(improvement_pct, run_data):
     """
-    Calculate days to adaptation plateau based on improvement potential and training history
+    FIXED: Calculate days to adaptation plateau based on improvement potential and training history
     """
-    base_days = 12  # Standard adaptation timeline
-    
-    # More improvement potential = longer adaptation time
+    # FIXED: Base days should scale with improvement potential
     if improvement_pct >= 20:
-        days = 16  # High potential takes longer
+        base_days = 16  # High potential = longer adaptation
     elif improvement_pct >= 15:
-        days = 14
+        base_days = 14
     elif improvement_pct >= 10:
-        days = 12
+        base_days = 12
+    elif improvement_pct >= 8:
+        base_days = 10
     else:
-        days = 9   # Already adapted = faster fine-tuning
+        base_days = 8   # Low potential = already adapted
     
     # Adjust based on training frequency
     if len(run_data) > 0:
@@ -270,21 +296,24 @@ def calculate_adaptation_days(improvement_pct, run_data):
         else:
             dates = run_data['date'].tolist()
             
-        date_range = (max(dates) - min(dates)).days
-        if date_range > 0:
-            runs_per_week = len(run_data) * 7 / date_range
-            if runs_per_week >= 5:
-                days -= 2  # Frequent runners adapt faster
-            elif runs_per_week <= 2:
-                days += 2  # Infrequent runners adapt slower
+        if len(dates) > 1:
+            date_range = (max(dates) - min(dates)).days
+            if date_range > 0:
+                runs_per_week = len(run_data) * 7 / date_range
+                if runs_per_week >= 5:
+                    base_days -= 2  # Frequent runners adapt faster
+                elif runs_per_week >= 3:
+                    base_days -= 1  # Regular runners adapt normally
+                elif runs_per_week <= 2:
+                    base_days += 2  # Infrequent runners adapt slower
     
-    return max(7, min(21, days))
+    return max(7, min(21, base_days))
     
 def run_improved_analysis(run_data_df, ml_model, features_df, clean_run_data, outliers, threshold):
     """
     Improved analysis with better adaptation potential calculation
     """
-    # Calculate improvement potential using the new method
+    # Calculate improvement potential using the fixed method
     improvement_pct, debug_info = calculate_adaptation_potential(
         run_data_df, features_df, ml_model, clean_run_data
     )
@@ -618,15 +647,19 @@ def create_visualization(run_data_df, dates, raw_scores_arr, adjusted_scores,
 def generate_adaptation_advice(improvement_pct, baseline_hss, plateau_days, run_data):
     """Generate personalized heat adaptation training advice"""
     
-    # Determine adaptation category
+    # FIXED: Determine adaptation category based on improvement potential
     if improvement_pct >= 18:
         category = "Heat-Naive (High Adaptation Potential)"
+        advice_level = "beginner"
     elif improvement_pct >= 12:
         category = "Moderately Heat-Adapted"
+        advice_level = "intermediate"
     elif improvement_pct >= 8:
         category = "Somewhat Heat-Adapted"
+        advice_level = "advanced"
     else:
         category = "Well Heat-Adapted"
+        advice_level = "expert"
     
     st.subheader("🔥 Heat Adaptation Training Recommendations")
     
@@ -649,13 +682,40 @@ def generate_adaptation_advice(improvement_pct, baseline_hss, plateau_days, run_
     """)
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # FIXED: Provide specific advice based on adaptation level
     st.markdown('<div class="info-box">', unsafe_allow_html=True)
-    st.markdown("**🌡️ HEAT ADAPTATION TIMELINE:**")
-    st.markdown("""
-    • **Days 1-3:** Initial physiological responses begin
-    • **Days 4-7:** Plasma volume expansion (easier sweating)
-    • **Days 8-12:** Improved sweat rate and cooling efficiency
-    """)
+    if advice_level == "beginner":
+        st.markdown("**🌡️ HEAT ADAPTATION PROTOCOL (High Potential):**")
+        st.markdown("""
+        • **Week 1-2:** 20-30 min easy runs in 80-85°F, 60-70% humidity
+        • **Week 2-3:** Increase to 45-60 min, add one tempo session per week
+        • **Goal:** Build basic heat tolerance and sweat response
+        • **Expected gains:** 15-25% improvement in heat performance
+        """)
+    elif advice_level == "intermediate":
+        st.markdown("**🌡️ HEAT ADAPTATION PROTOCOL (Moderate Potential):**")
+        st.markdown("""
+        • **Week 1:** 30-45 min runs in current conditions
+        • **Week 2-3:** Add structured intervals in heat (5x3min at threshold)
+        • **Goal:** Refine heat efficiency and cardiac adaptations
+        • **Expected gains:** 10-18% improvement in heat performance
+        """)
+    elif advice_level == "advanced":
+        st.markdown("**🌡️ HEAT ADAPTATION PROTOCOL (Some Potential):**")
+        st.markdown("""
+        • **Week 1-2:** Focus on heat-specific workouts 2x per week
+        • **Week 3:** Add race-pace efforts in warm conditions
+        • **Goal:** Fine-tune existing adaptations
+        • **Expected gains:** 5-12% improvement in heat performance
+        """)
+    else:
+        st.markdown("**🌡️ HEAT MAINTENANCE PROTOCOL (Well-Adapted):**")
+        st.markdown("""
+        • **Ongoing:** 1-2 heat sessions per week to maintain adaptations
+        • **Focus:** Technical improvements (pacing, fueling strategy)
+        • **Goal:** Maintain current heat fitness level
+        • **Expected gains:** 3-8% refinement in heat performance
+        """)
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown("**💡 PROGRESS MONITORING:**")
@@ -666,7 +726,7 @@ def generate_adaptation_advice(improvement_pct, baseline_hss, plateau_days, run_
     • Re-run this analysis after {} days to verify improvement
     """.format(plateau_days))
     
-    return {'category': category}
+    return {'category': category, 'advice_level': advice_level}
 
 # --- STREAMLIT APP MAIN INTERFACE ---
 
@@ -851,8 +911,6 @@ def main():
         
         # Analysis configuration
         st.sidebar.subheader("🔧 Analysis Settings")
-        plateau_days = st.sidebar.slider("Adaptation plateau (days):", min_value=7, max_value=21, value=12, 
-                                         help="Days to reach heat adaptation plateau")
         outlier_method = st.sidebar.selectbox("Outlier detection method:", ['iqr', 'zscore'])
         outlier_threshold = st.sidebar.slider("Outlier threshold:", min_value=1.0, max_value=3.0, value=1.5, step=0.1)
         
@@ -931,13 +989,16 @@ def main():
                             residuals = df['raw_score'].values - predictions
                             model_used = "Simple Average"
                     
-                    # Calculate improvement percentage using the fixed function
+                    # Calculate improvement percentage using the FIXED function
                     improvement_pct, debug_info = calculate_adaptation_potential(
                         df, features_df, ml_model, clean_run_data_df
                     )
                     
                     # Apply physiological limits
                     improvement_pct = apply_physiological_limits(improvement_pct, debug_info=debug_info)
+                    
+                    # Calculate adaptation days using FIXED function
+                    plateau_days = calculate_adaptation_days(improvement_pct, clean_run_data_df)
                     
                     # Calculate baseline HSS
                     baseline_hss = clean_run_data_df['raw_score'].mean()
@@ -1100,6 +1161,23 @@ def main():
         
         **CSV Format:**
         Your CSV should have columns for each required field. The app will help you map column names during upload.
+        """)
+    
+    with st.expander("🔧 Testing the Fix"):
+        st.markdown("""
+        **To test if the fix works, try these scenarios:**
+        
+        **Heat-Naive Runner (Should show HIGH potential):**
+        - Temperature: 95°F, Humidity: 80%
+        - Pace: Much slower than PR (e.g., 9:00 vs 7:30 PR)
+        - High heart rate (e.g., 180+ bpm)
+        - Expected: 18-25% improvement, 14-16 days
+        
+        **Heat-Adapted Runner (Should show LOW potential):**
+        - Temperature: 75°F, Humidity: 50%
+        - Pace: Close to PR (e.g., 7:45 vs 7:30 PR)
+        - Moderate heart rate (e.g., 160 bpm)
+        - Expected: 3-8% improvement, 8-10 days
         """)
 
 if __name__ == "__main__":
