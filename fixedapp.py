@@ -1147,8 +1147,8 @@ def main():
             st.dataframe(df_display.drop('Index', axis=1), use_container_width=True)
             
             # Add remove run functionality
-            st.subheader("🗑️ Remove a Run")
-            col1, col2 = st.columns([3, 1])
+            st.subheader("🗑️ Manage Runs")
+            col1, col2, col3 = st.columns([4, 2, 2])
             
             with col1:
                 if len(st.session_state.run_data) > 0:
@@ -1168,18 +1168,32 @@ def main():
                     )
             
             with col2:
-                if st.button("🗑️ Remove Selected Run", type="secondary"):
+                if st.button("🗑️ Remove Selected", type="secondary", use_container_width=True):
                     if selected_run is not None:
                         removed_run = st.session_state.run_data.pop(selected_run)
                         st.success(f"✅ Removed run from {removed_run['date'].strftime('%Y-%m-%d')}")
                         st.rerun()
             
-            # Clear all runs button
-            if st.button("Clear All Runs", type="secondary"):
-                if st.checkbox("⚠️ Confirm: Delete all runs"):
-                    st.session_state.run_data = []
-                    st.success("All runs cleared!")
-                    st.rerun()
+            with col3:
+                # Clear all runs button with double-click protection
+                if 'clear_confirm' not in st.session_state:
+                    st.session_state.clear_confirm = False
+                
+                if not st.session_state.clear_confirm:
+                    if st.button("🗑️ Clear All Runs", type="secondary", use_container_width=True):
+                        st.session_state.clear_confirm = True
+                        st.rerun()
+                else:
+                    # Show confirmation button
+                    if st.button("⚠️ Confirm Clear All", type="primary", use_container_width=True):
+                        st.session_state.run_data = []
+                        st.session_state.clear_confirm = False
+                        st.success("All runs cleared!")
+                        st.rerun()
+                    # Add cancel option
+                    if st.button("Cancel", type="secondary", use_container_width=True):
+                        st.session_state.clear_confirm = False
+                        st.rerun()
     
     # CSV upload section
     elif input_method == "CSV Upload":
