@@ -841,16 +841,17 @@ def main():
         
         if st.button("🚀 Run Analysis", type="primary"):
             with st.spinner("Running ML analysis..."):
-                    # Temporary simple calculation to test
-                    baseline_hss = run_data['raw_score'].mean()
-                    improvement_pct = min(20, max(8, baseline_hss * 0.8))
-                    debug_info = None
-                    # Keep using sidebar plateau_days
                     try:
                         # Prepare data
                         run_data = st.session_state.run_data.copy()
                         df = pd.DataFrame(run_data)
                         df = df.sort_values('date').reset_index(drop=True)
+                        
+                        # Temporary simple calculation to test
+                        baseline_hss = run_data['raw_score'].mean()
+                        improvement_pct = min(20, max(8, baseline_hss * 0.8))
+                        debug_info = None
+                        # Keep using sidebar plateau_days
                         
                         # Create ML features
                         features_df = create_ml_features(df)
