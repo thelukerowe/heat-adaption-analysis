@@ -86,7 +86,7 @@ See `examples/sample_data.csv` for reference.
 
 The system automatically selects the best model based on data availability:
 
-1. **Machine Learning** (10+ clean data points): Random Forest + Gradient Boosting
+1. **Machine Learning** (10+ clean data points): Random Forest + Gradient Boosting + XGBoost
 2. **Complex Logarithmic** (5-9 data points): Advanced statistical modeling
 3. **Research-Based** (3-4 data points): Physiological research-based predictions
 
