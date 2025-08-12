@@ -13,6 +13,12 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    print("XGBoost not installed. Run 'pip install xgboost' to enable XGBoost model.")
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -673,8 +679,26 @@ class HeatAdaptationMLModel:
                 random_state=42
             )
         }
+        
+        # Add XGBoost if available
+        if XGBOOST_AVAILABLE:
+            self.models['xgboost'] = xgb.XGBRegressor(
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                objective='reg:squarederror',
+                eval_metric='rmse'
+            )
+            print("✅ XGBoost model added successfully!")
+        else:
+            print("⚠️ XGBoost not available. Install with: pip install xgboost")
+            
         self.scaler = StandardScaler()
         self.best_model = None
+        self.best_model_name = None
         self.feature_names = None
         self.is_trained = False
         
@@ -714,6 +738,10 @@ class HeatAdaptationMLModel:
         
         model_scores = {}
         
+        # Display which models are being trained
+        available_models = list(self.models.keys())
+        st.info(f"Training {len(available_models)} models: {', '.join(available_models)}")
+        
         for name, model in self.models.items():
             try:
                 model.fit(X_train_scaled, y_train)
@@ -734,9 +762,26 @@ class HeatAdaptationMLModel:
                 st.error(f"{name} training failed: {str(e)}")
         
         if model_scores:
+            # Find best model based on RMSE
             best_name = min(model_scores.keys(), key=lambda k: model_scores[k]['rmse'])
             self.best_model = model_scores[best_name]['model']
+            self.best_model_name = best_name
             self.is_trained = True
+            
+            # Display model comparison
+            st.subheader("🤖 Model Performance Comparison")
+            model_comparison = pd.DataFrame({
+                name: {
+                    'RMSE': scores['rmse'],
+                    'MAE': scores['mae'],
+                    'R²': scores['r2']
+                }
+                for name, scores in model_scores.items()
+            }).T
+            
+            # Highlight best model
+            st.success(f"🏆 Best Model: **{best_name.replace('_', ' ').title()}** (RMSE: {model_scores[best_name]['rmse']:.3f})")
+            st.dataframe(model_comparison.round(3), use_container_width=True)
             
             if hasattr(self.best_model, 'feature_importances_'):
                 self.display_feature_importance()
@@ -761,9 +806,21 @@ class HeatAdaptationMLModel:
                 'importance': self.best_model.feature_importances_
             }).sort_values('importance', ascending=False)
             
-            st.subheader("📈 Top Feature Importance")
+            st.subheader(f"📈 Top Feature Importance ({self.best_model_name.replace('_', ' ').title()})")
+            
+            # Create a bar chart for feature importance
+            fig, ax = plt.subplots(figsize=(10, 6))
+            top_features = importance_df.head(10)
+            ax.barh(top_features['feature'], top_features['importance'])
+            ax.set_xlabel('Importance')
+            ax.set_title(f'Top 10 Feature Importances - {self.best_model_name.replace("_", " ").title()}')
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            # Also show top 5 as text
+            st.write("**Top 5 Most Important Features:**")
             for i, row in importance_df.head(5).iterrows():
-                st.write(f"**{row['feature']}**: {row['importance']:.3f}")
+                st.write(f"{row['feature']}: {row['importance']:.3f}")
 
 def estimate_threshold(scores):
     return np.median(scores)
@@ -1357,7 +1414,7 @@ def main():
                     if ml_model.is_trained:
                         predictions = ml_model.predict(features_df)
                         residuals = df['raw_score'].values - predictions
-                        model_used = "ML Model"
+                        model_used = f"{ml_model.best_model_name.replace('_', ' ').title()} Model" if ml_model.best_model_name else "ML Model"
                     else:
                         # Fallback to statistical model
                         X = np.arange(len(df)).reshape(-1, 1)
@@ -1449,13 +1506,15 @@ def main():
                     
                     # Model performance metrics
                     if model_performance:
-                        st.subheader("🤖 Model Performance")
-                        col1, col2, col3 = st.columns(3)
+                        st.subheader("🤖 Best Model Performance")
+                        col1, col2, col3, col4 = st.columns(4)
                         with col1:
-                            st.metric("R² Score", f"{model_performance['r2']:.3f}")
+                            st.metric("Model", model_used)
                         with col2:
-                            st.metric("RMSE", f"{model_performance['rmse']:.3f}")
+                            st.metric("R² Score", f"{model_performance['r2']:.3f}")
                         with col3:
+                            st.metric("RMSE", f"{model_performance['rmse']:.3f}")
+                        with col4:
                             st.metric("MAE", f"{model_performance['mae']:.3f}")
                     
                     # Generate FIXED training advice
