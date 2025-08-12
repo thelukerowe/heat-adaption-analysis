@@ -82,8 +82,15 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
             
         baseline_hss = clean_run_data_df['raw_score'].mean()
         
-        # FIXED: Proper mile PR assessment
-        mile_pr_sec = clean_run_data_df['mile_pr_sec'].iloc[0] if len(clean_run_data_df) > 0 else 450
+        # FIXED: Proper mile PR assessment - check both DataFrame and original data
+        if 'mile_pr_sec' in clean_run_data_df.columns and len(clean_run_data_df) > 0:
+            mile_pr_sec = clean_run_data_df['mile_pr_sec'].iloc[0]
+        elif isinstance(run_data_list, pd.DataFrame) and 'mile_pr_sec' in run_data_list.columns:
+            mile_pr_sec = run_data_list['mile_pr_sec'].iloc[0]
+        else:
+            # Fallback - this shouldn't happen with proper data
+            mile_pr_sec = 450
+            print(f"WARNING: mile_pr_sec not found in data, using default {mile_pr_sec}")
         
         # Convert seconds to MM:SS for display
         pr_minutes = mile_pr_sec // 60
@@ -91,6 +98,8 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
         mile_pr_display = f"{pr_minutes}:{pr_seconds:02d}"
         
         print(f"DEBUG: Mile PR = {mile_pr_sec} seconds ({mile_pr_display})")
+        print(f"DEBUG: Data columns = {clean_run_data_df.columns.tolist()}")
+        print(f"DEBUG: First row mile_pr_sec = {clean_run_data_df['mile_pr_sec'].iloc[0] if 'mile_pr_sec' in clean_run_data_df.columns else 'NOT FOUND'}")
         
         # CORRECTED Performance Level Assessment
         if mile_pr_sec <= 300:  # Sub-5:00 mile (300 seconds) - Elite
@@ -116,7 +125,16 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
         
         # FIXED: Heat Adaptation Status Assessment
         # Calculate how much they slow down in heat relative to PR
+        if 'pace_sec' not in clean_run_data_df.columns:
+            print(f"ERROR: pace_sec not in columns: {clean_run_data_df.columns.tolist()}")
+            raise ValueError("pace_sec column missing from data")
+            
         avg_pace_sec = clean_run_data_df['pace_sec'].mean()
+        
+        if pd.isna(avg_pace_sec) or avg_pace_sec == 0:
+            print(f"ERROR: Invalid avg_pace_sec = {avg_pace_sec}")
+            raise ValueError(f"Invalid average pace: {avg_pace_sec}")
+            
         pace_slowdown_factor = avg_pace_sec / mile_pr_sec
         
         print(f"DEBUG: Avg pace = {avg_pace_sec//60}:{avg_pace_sec%60:02d} ({avg_pace_sec}s)")
@@ -224,9 +242,25 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
         
     except Exception as e:
         print(f"ERROR in adaptation calculation: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        
         # Fallback based on performance level only
         try:
-            mile_pr_sec = clean_run_data_list[0].get('mile_pr_sec', 450)
+            # Try to get mile_pr_sec from different sources
+            mile_pr_sec = 450  # Default
+            mile_pr_display = "Unknown"
+            
+            if isinstance(clean_run_data_list, list) and len(clean_run_data_list) > 0:
+                mile_pr_sec = clean_run_data_list[0].get('mile_pr_sec', 450)
+            elif isinstance(clean_run_data_list, pd.DataFrame) and 'mile_pr_sec' in clean_run_data_list.columns:
+                mile_pr_sec = clean_run_data_list['mile_pr_sec'].iloc[0]
+            elif isinstance(run_data_list, pd.DataFrame) and 'mile_pr_sec' in run_data_list.columns:
+                mile_pr_sec = run_data_list['mile_pr_sec'].iloc[0]
+            
+            pr_minutes = mile_pr_sec // 60
+            pr_seconds = mile_pr_sec % 60
+            mile_pr_display = f"{pr_minutes}:{pr_seconds:02d}"
             
             if mile_pr_sec <= 300:  # Elite
                 improvement_pct = 4
@@ -238,14 +272,16 @@ def calculate_adaptation_potential_fixed_v2(run_data_list, features_df, ml_model
                 improvement_pct = 18
                 performance_level = "recreational"
                 
-        except:
+        except Exception as e2:
+            print(f"ERROR in fallback: {str(e2)}")
             improvement_pct = 12  # Default
             performance_level = "unknown"
+            mile_pr_display = "Unknown"
         
         return improvement_pct, {
             'baseline_hss': baseline_hss if 'baseline_hss' in locals() else 10,
             'performance_level': performance_level,
-            'mile_pr_display': "Unknown",
+            'mile_pr_display': mile_pr_display,
             'heat_adaptation_status': 'unknown',
             'error': str(e)
         }
@@ -259,6 +295,10 @@ def apply_physiological_limits_fixed_v2(improvement_pct, max_improvement=25.0, d
     
     if debug_info:
         st.subheader("🔍 FIXED Heat Adaptation Analysis")
+        
+        # Check for errors first
+        if 'error' in debug_info:
+            st.error(f"Analysis Error: {debug_info['error']}")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -966,9 +1006,14 @@ def main():
             st.session_state.run_data = []
             mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
             
+            print(f"LOADING SCENARIO: {scenario['name']}")
+            print(f"Mile PR: {scenario['mile_pr']} = {mile_pr_sec} seconds")
+            
             for i, run_data in enumerate(scenario['runs']):
                 date_obj = datetime.now() - timedelta(days=len(scenario['runs']) - i)
                 pace_sec = pace_to_seconds_fixed(run_data['pace'])
+                
+                print(f"Run {i+1}: pace={run_data['pace']} ({pace_sec}s), temp={run_data['temp']}, hr={run_data['hr']}")
                 
                 raw_score = heat_score(
                     run_data['temp'], run_data['humidity'], 
@@ -991,10 +1036,12 @@ def main():
                 }
                 
                 st.session_state.run_data.append(new_run)
+                print(f"Added run with mile_pr_sec={new_run['mile_pr_sec']}")
             
             # Update the mile PR input to match the scenario
             st.success(f"✅ Loaded {scenario['name']} test data with {len(scenario['runs'])} runs!")
-            st.info(f"Mile PR set to: {scenario['mile_pr']}")
+            st.info(f"Mile PR set to: {scenario['mile_pr']} ({mile_pr_sec} seconds)")
+            print(f"Session state now has {len(st.session_state.run_data)} runs")
             st.rerun()
     
     # Manual entry section
@@ -1164,17 +1211,25 @@ def main():
                 try:
                     # Prepare data - convert list to DataFrame
                     run_data_list = st.session_state.run_data.copy()
+                    
+                    # Debug the raw data first
+                    if len(run_data_list) > 0:
+                        print(f"DEBUG: First run data keys = {run_data_list[0].keys()}")
+                        print(f"DEBUG: First run mile_pr_sec = {run_data_list[0].get('mile_pr_sec', 'NOT FOUND')}")
+                    
                     df = pd.DataFrame(run_data_list)
                     df = df.sort_values('date').reset_index(drop=True)
                     
-                    # Ensure all runs have the current mile_pr_sec
+                    # Ensure all runs have the current mile_pr_sec from the sidebar
                     current_mile_pr_sec = pace_to_seconds_fixed(mile_pr_str)
-                    for i, run in enumerate(run_data_list):
-                        if 'mile_pr_sec' not in run or run['mile_pr_sec'] is None:
-                            run['mile_pr_sec'] = current_mile_pr_sec
+                    print(f"DEBUG: Current mile_pr_str = {mile_pr_str}, converted to {current_mile_pr_sec} seconds")
                     
-                    # Update DataFrame with consistent mile_pr_sec
+                    # Update the mile_pr_sec for all rows to ensure consistency
                     df['mile_pr_sec'] = current_mile_pr_sec
+                    
+                    # Also update the list for consistency
+                    for run in run_data_list:
+                        run['mile_pr_sec'] = current_mile_pr_sec
                     
                     # Create ML features
                     features_df = create_ml_features(df)
@@ -1244,6 +1299,12 @@ def main():
                             model_used = "Simple Average"
                     
                     # *** USE THE FIXED FUNCTIONS HERE ***
+                    # Debug: Check what data we're passing
+                    print(f"DEBUG MAIN: DataFrame columns = {df.columns.tolist()}")
+                    print(f"DEBUG MAIN: First mile_pr_sec in df = {df['mile_pr_sec'].iloc[0] if 'mile_pr_sec' in df.columns and len(df) > 0 else 'NOT FOUND'}")
+                    print(f"DEBUG MAIN: Clean DataFrame columns = {clean_run_data_df.columns.tolist()}")
+                    print(f"DEBUG MAIN: First mile_pr_sec in clean = {clean_run_data_df['mile_pr_sec'].iloc[0] if 'mile_pr_sec' in clean_run_data_df.columns and len(clean_run_data_df) > 0 else 'NOT FOUND'}")
+                    
                     # Calculate improvement percentage using the FIXED function
                     improvement_pct, debug_info = calculate_adaptation_potential_fixed_v2(
                         df, features_df, ml_model, clean_run_data_df
