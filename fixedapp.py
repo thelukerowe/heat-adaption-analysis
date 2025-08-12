@@ -918,8 +918,13 @@ def main():
     # Sidebar for inputs
     st.sidebar.header("📝 Setup & Configuration")
     
-    # Initial setup
-    mile_pr_str = st.sidebar.text_input("Mile PR Pace (MM:SS):", value="7:30", help="Enter your mile personal record pace")
+    # Initial setup - Check if we have a scenario mile PR to use
+    if 'scenario_mile_pr' in st.session_state:
+        default_mile_pr = st.session_state.scenario_mile_pr
+    else:
+        default_mile_pr = "7:30"
+    
+    mile_pr_str = st.sidebar.text_input("Mile PR Pace (MM:SS):", value=default_mile_pr, key="mile_pr_input", help="Enter your mile personal record pace")
     max_hr_global = st.sidebar.number_input("Max Heart Rate:", min_value=120, max_value=220, value=190, help="Your maximum heart rate")
     
     # Data input method
@@ -956,6 +961,8 @@ def main():
         
         # Load button in sidebar
         if st.sidebar.button(f"Load {scenario['name']}", key="load_scenario_btn"):
+            # Store the scenario's mile PR in session state
+            st.session_state.scenario_mile_pr = scenario['mile_pr']
             st.session_state.run_data = []
             mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
             
@@ -1011,6 +1018,7 @@ def main():
                 try:
                     date_obj = datetime.combine(date_input, datetime.min.time())
                     pace_sec = pace_to_seconds_fixed(pace_str)
+                    # Use the current mile_pr_str from the sidebar input
                     mile_pr_sec = pace_to_seconds_fixed(mile_pr_str)
                     
                     raw_score = heat_score(temp, humidity, pace_sec, avg_hr, max_hr_global, distance, multiplier=1.0)
@@ -1158,6 +1166,15 @@ def main():
                     run_data_list = st.session_state.run_data.copy()
                     df = pd.DataFrame(run_data_list)
                     df = df.sort_values('date').reset_index(drop=True)
+                    
+                    # Ensure all runs have the current mile_pr_sec
+                    current_mile_pr_sec = pace_to_seconds_fixed(mile_pr_str)
+                    for i, run in enumerate(run_data_list):
+                        if 'mile_pr_sec' not in run or run['mile_pr_sec'] is None:
+                            run['mile_pr_sec'] = current_mile_pr_sec
+                    
+                    # Update DataFrame with consistent mile_pr_sec
+                    df['mile_pr_sec'] = current_mile_pr_sec
                     
                     # Create ML features
                     features_df = create_ml_features(df)
