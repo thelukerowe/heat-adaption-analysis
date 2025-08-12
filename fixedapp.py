@@ -842,7 +842,7 @@ def main():
         if st.button("🚀 Run Analysis", type="primary"):
             with st.spinner("Running ML analysis..."):
                     # Temporary simple calculation to test
-                    baseline_hss = np.mean(run_data['raw_score'])
+                    baseline_hss = run_data['raw_score'].mean()
                     improvement_pct = min(20, max(8, baseline_hss * 0.8))
                     debug_info = None
                     # Keep using sidebar plateau_days
