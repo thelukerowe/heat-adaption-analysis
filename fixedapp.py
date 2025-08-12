@@ -1238,52 +1238,77 @@ def main():
         st.info("Add some running data to get started with the analysis!")
     
     # Test scenarios section
-    st.sidebar.subheader("🧪 Test the Fixed Logic")
-    if st.sidebar.button("Load Test Scenarios"):
-        test_scenarios = create_test_scenarios()
+# REPLACE THE EXISTING TEST SCENARIOS SECTION WITH THIS CODE
+# Find the section that starts with "# Test scenarios section" and replace it
+
+# Test scenarios section - FIXED to always be visible
+st.sidebar.subheader("🧪 Test the Fixed Logic")
+
+# Always show test scenarios regardless of data state
+if st.sidebar.button("Load Test Scenarios"):
+    if 'show_test_scenarios' not in st.session_state:
+        st.session_state.show_test_scenarios = True
+    else:
+        st.session_state.show_test_scenarios = not st.session_state.show_test_scenarios
+
+# Show test scenarios interface if activated
+if st.session_state.get('show_test_scenarios', False):
+    st.header("🧪 Test Scenarios to Verify Fixed Logic")
+    
+    test_scenarios = create_test_scenarios()
+    
+    selected_scenario = st.selectbox(
+        "Choose a test scenario:", 
+        [s['name'] for s in test_scenarios]
+    )
+    
+    scenario = next(s for s in test_scenarios if s['name'] == selected_scenario)
+    
+    # Show scenario details
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Mile PR:** {scenario['mile_pr']}")
+        st.write(f"**Expected Category:** {scenario['expected_category']}")
+    with col2:
+        st.write(f"**Expected Improvement:** {scenario['expected_improvement']}%")
+        st.write(f"**Number of Runs:** {len(scenario['runs'])}")
+    
+    if st.button(f"Load {scenario['name']} Data", type="primary"):
+        st.session_state.run_data = []
+        mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
         
-        st.header("🧪 Test Scenarios to Verify Fixed Logic")
-        
-        selected_scenario = st.selectbox(
-            "Choose a test scenario:", 
-            [s['name'] for s in test_scenarios]
-        )
-        
-        scenario = next(s for s in test_scenarios if s['name'] == selected_scenario)
-        
-        if st.button(f"Load {scenario['name']} Data"):
-            st.session_state.run_data = []
-            mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
+        for i, run_data in enumerate(scenario['runs']):
+            date_obj = datetime.now() - timedelta(days=len(scenario['runs']) - i)
+            pace_sec = pace_to_seconds_fixed(run_data['pace'])
             
-            for i, run_data in enumerate(scenario['runs']):
-                date_obj = datetime.now() - timedelta(days=len(scenario['runs']) - i)
-                pace_sec = pace_to_seconds_fixed(run_data['pace'])
-                
-                raw_score = heat_score(
-                    run_data['temp'], run_data['humidity'], 
-                    pace_sec, run_data['hr'], max_hr_global, 
-                    3.1, multiplier=1.0
-                )
-                
-                new_run = {
-                    'date': date_obj,
-                    'temp': run_data['temp'],
-                    'humidity': run_data['humidity'],
-                    'pace_sec': pace_sec,
-                    'avg_hr': run_data['hr'],
-                    'max_hr': max_hr_global,
-                    'distance': 3.1,
-                    'raw_score': raw_score,
-                    'adjusted_score': None,
-                    'relative_score': None,
-                    'mile_pr_sec': mile_pr_sec
-                }
-                
-                st.session_state.run_data.append(new_run)
+            raw_score = heat_score(
+                run_data['temp'], run_data['humidity'], 
+                pace_sec, run_data['hr'], max_hr_global, 
+                3.1, multiplier=1.0
+            )
             
-            st.success(f"✅ Loaded {scenario['name']} test data!")
-            st.info(f"**Expected:** {scenario['expected_improvement']}% improvement, Category: {scenario['expected_category']}")
-            st.rerun()
+            new_run = {
+                'date': date_obj,
+                'temp': run_data['temp'],
+                'humidity': run_data['humidity'],
+                'pace_sec': pace_sec,
+                'avg_hr': run_data['hr'],
+                'max_hr': max_hr_global,
+                'distance': 3.1,
+                'raw_score': raw_score,
+                'adjusted_score': None,
+                'relative_score': None,
+                'mile_pr_sec': mile_pr_sec
+            }
+            
+            st.session_state.run_data.append(new_run)
+        
+        st.success(f"✅ Loaded {scenario['name']} test data!")
+        st.info(f"**Expected:** {scenario['expected_improvement']}% improvement, Category: {scenario['expected_category']}")
+        
+        # Hide test scenarios after loading and rerun
+        st.session_state.show_test_scenarios = False
+        st.rerun()
     
     # Footer with information
     st.markdown("---")
