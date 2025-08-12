@@ -55,7 +55,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- All your original functions (keeping them exactly the same) ---
+# --- All your original functions (fixing the DataFrame/list issues) ---
 
 def apply_physiological_limits(improvement_pct, max_improvement=25.0, debug_info=None):
     """Apply realistic physiological limits to heat adaptation improvement with better messaging"""
@@ -84,6 +84,8 @@ def apply_physiological_limits(improvement_pct, max_improvement=25.0, debug_info
             st.write(f"• Temperature Experience: {debug_info['temp_factor']:.2f}")
             st.write(f"• Combined Score: {debug_info['combined_score']:.2f}")
     
+    return limited_improvement
+
 def normalize(value, min_val, max_val):
     return (value - min_val) / (max_val - min_val)
 
@@ -100,19 +102,26 @@ def pace_to_seconds(pace_str):
         pace_min = float(pace_str)
         return int(pace_min * 60)
         
-def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_data):
+def calculate_adaptation_potential(run_data_list, features_df, ml_model, clean_run_data_list):
     """
     Calculate heat adaptation improvement potential based on multiple factors
+    Fixed to handle list data properly
     """
     try:
-        baseline_hss = np.mean(clean_run_data['raw_score'].tolist())
+        # Convert to DataFrame if needed
+        if isinstance(clean_run_data_list, list):
+            clean_run_data_df = pd.DataFrame(clean_run_data_list)
+        else:
+            clean_run_data_df = clean_run_data_list
+            
+        baseline_hss = clean_run_data_df['raw_score'].mean()
         
         # Factor 1: Baseline heat strain level (higher = more potential)
         # Normalize baseline HSS to 0-1 scale (assuming typical range 5-25)
         hss_factor = min(1.0, max(0.0, (baseline_hss - 5) / 20))
         
         # Factor 2: Performance variability in heat (higher variability = more potential)
-        hss_values = np.array(clean_run_data['raw_score'].tolist())
+        hss_values = clean_run_data_df['raw_score'].values
         if len(hss_values) > 1 and np.mean(hss_values) > 0:
             cv = np.std(hss_values) / np.mean(hss_values)  # coefficient of variation
             variability_factor = min(1.0, cv * 2)  # scale CV to reasonable range
@@ -120,7 +129,7 @@ def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_da
             variability_factor = 0.5
         
         # Factor 3: Temperature exposure history
-        temps = [run['temp'] for run in clean_run_data if run.get('temp') is not None]
+        temps = clean_run_data_df['temp'].dropna().values
         if len(temps) > 0:
             avg_temp = np.mean(temps)
             temp_range = max(temps) - min(temps) if len(temps) > 1 else 0
@@ -146,10 +155,10 @@ def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_da
         
         # Factor 4: Heart rate efficiency (higher HR at given pace = more potential)
         hr_efficiencies = []
-        for run in clean_run_data:
+        for _, run in clean_run_data_df.iterrows():
             try:
-                if (run.get('pace_sec') and run.get('mile_pr_sec') and 
-                    run.get('avg_hr') and run.get('max_hr') and
+                if (pd.notna(run.get('pace_sec')) and pd.notna(run.get('mile_pr_sec')) and 
+                    pd.notna(run.get('avg_hr')) and pd.notna(run.get('max_hr')) and
                     run['pace_sec'] > 0 and run['mile_pr_sec'] > 0 and run['max_hr'] > 0):
                     
                     pace_ratio = run['pace_sec'] / run['mile_pr_sec']
@@ -174,8 +183,8 @@ def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_da
         if ml_model.is_trained:
             try:
                 predictions = ml_model.predict(features_df)
-                actual_values = np.array(run_data['raw_score'].tolist())
-                residuals = actual_values - predictions
+                actual_values = clean_run_data_df['raw_score'].values
+                residuals = actual_values - predictions[:len(actual_values)]
                 # Higher positive residuals = performing worse than expected = more potential
                 avg_residual = np.mean(residuals)
                 residual_std = np.std(residuals)
@@ -218,7 +227,10 @@ def calculate_adaptation_potential(run_data, features_df, ml_model, clean_run_da
     except Exception as e:
         # Fallback to simple calculation if anything goes wrong
         st.error(f"Advanced analysis failed: {str(e)}. Using simple calculation.")
-        baseline_hss = np.mean([run.get('raw_score', 10) for run in clean_run_data])
+        if isinstance(clean_run_data_list, list):
+            baseline_hss = np.mean([run.get('raw_score', 10) for run in clean_run_data_list])
+        else:
+            baseline_hss = clean_run_data_list['raw_score'].mean()
         improvement_pct = min(20, max(8, baseline_hss * 0.8))
         
         return improvement_pct, {
@@ -252,8 +264,13 @@ def calculate_adaptation_days(improvement_pct, run_data):
     
     # Adjust based on training frequency
     if len(run_data) > 0:
-        date_range = (max([run['date'] for run in run_data]) - 
-                     min([run['date'] for run in run_data])).days
+        # Handle both list and DataFrame
+        if isinstance(run_data, list):
+            dates = [run['date'] for run in run_data]
+        else:
+            dates = run_data['date'].tolist()
+            
+        date_range = (max(dates) - min(dates)).days
         if date_range > 0:
             runs_per_week = len(run_data) * 7 / date_range
             if runs_per_week >= 5:
@@ -263,14 +280,13 @@ def calculate_adaptation_days(improvement_pct, run_data):
     
     return max(7, min(21, days))
     
-# Replace the analysis section in your main() function with this:
-def run_improved_analysis(run_data, ml_model, features_df, clean_run_data, outliers, threshold):
+def run_improved_analysis(run_data_df, ml_model, features_df, clean_run_data, outliers, threshold):
     """
     Improved analysis with better adaptation potential calculation
     """
     # Calculate improvement potential using the new method
     improvement_pct, debug_info = calculate_adaptation_potential(
-        run_data, features_df, ml_model, clean_run_data
+        run_data_df, features_df, ml_model, clean_run_data
     )
     
     # Calculate adaptation days
@@ -543,14 +559,14 @@ def risk_color_rel(score):
     else:
         return 'red'
 
-def create_visualization(run_data, dates, raw_scores_arr, adjusted_scores, 
+def create_visualization(run_data_df, dates, raw_scores_arr, adjusted_scores, 
                         adapted_same_runs, adapted_dates, outliers, 
                         improvement_pct, threshold, model_used, 
                         ci_50_lower, ci_50_upper, ci_80_lower, ci_80_upper, 
                         ci_95_lower, ci_95_upper, plateau_days):
     
     adjusted_colors = [risk_color_adj(s) for s in adjusted_scores]
-    relative_scores_list = [run['relative_score'] for run in run_data]
+    relative_scores_list = run_data_df['relative_score'].tolist()
     relative_colors = [risk_color_rel(s) for s in relative_scores_list]
 
     plt.figure(figsize=(14, 8))
@@ -559,10 +575,11 @@ def create_visualization(run_data, dates, raw_scores_arr, adjusted_scores,
     current_markers = ['x' if outlier else 'o' for outlier in outliers]
     current_sizes = [80 if outlier else 60 for outlier in outliers]
 
-    for i, (date, score, color, marker, size) in enumerate(zip(dates, run_data['raw_score'].tolist(), current_colors, current_markers, current_sizes)):
+    raw_scores_list = run_data_df['raw_score'].tolist()
+    for i, (date, score, color, marker, size) in enumerate(zip(dates, raw_scores_list, current_colors, current_markers, current_sizes)):
         plt.scatter(date, score, color=color, marker=marker, s=size, alpha=0.8, zorder=5)
 
-    plt.plot(dates, run_data['raw_score'].tolist(), linestyle='-', color='blue', label='Current Raw HSS', linewidth=2, alpha=0.7)
+    plt.plot(dates, raw_scores_list, linestyle='-', color='blue', label='Current Raw HSS', linewidth=2, alpha=0.7)
     plt.plot(dates, adjusted_scores, marker='x', linestyle='--', color='purple', label='Adjusted HSS', linewidth=1)
     plt.scatter(dates, adjusted_scores, color=adjusted_colors, s=100, alpha=0.7, label='Adjusted HSS Risk')
     plt.scatter(dates, relative_scores_list, color=relative_colors, s=100, alpha=0.5, edgecolors='k', marker='o', label='Relative HSS Risk')
@@ -841,184 +858,204 @@ def main():
         
         if st.button("🚀 Run Analysis", type="primary"):
             with st.spinner("Running ML analysis..."):
-                    try:
-                        # Prepare data
-                        run_data = st.session_state.run_data.copy()
-                        df = pd.DataFrame(run_data)
-                        df = df.sort_values('date').reset_index(drop=True)
+                try:
+                    # Prepare data - convert list to DataFrame
+                    run_data_list = st.session_state.run_data.copy()
+                    df = pd.DataFrame(run_data_list)
+                    df = df.sort_values('date').reset_index(drop=True)
+                    
+                    # Create ML features
+                    features_df = create_ml_features(df)
+                    
+                    # Detect outliers
+                    raw_scores = df['raw_score'].tolist()
+                    outliers = detect_outliers(raw_scores, method=outlier_method, threshold=outlier_threshold)
+                    
+                    # Filter out outliers for model training
+                    clean_features_df = features_df[~outliers].copy()
+                    clean_run_data_df = df[~outliers].copy()
+                    clean_run_data_list = [run_data_list[i] for i in range(len(run_data_list)) if not outliers[i]]
+                    
+                    # Train ML model
+                    ml_model = HeatAdaptationMLModel()
+                    model_performance = ml_model.train_models(clean_features_df)
+                    
+                    # Calculate baseline metrics
+                    threshold = estimate_threshold(clean_run_data_df['raw_score'].tolist())
+                    
+                    # Calculate adjusted scores and relative scores
+                    adjusted_scores = []
+                    relative_scores = []
+                    
+                    for i, (_, run) in enumerate(df.iterrows()):
+                        multiplier = adjust_multiplier(run['raw_score'], threshold, run['pace_sec'], run['mile_pr_sec'])
+                        adjusted_score = run['raw_score'] * multiplier
+                        relative_score = run['raw_score'] / threshold
                         
-                        # Temporary simple calculation to test
-                        baseline_hss = run_data['raw_score'].mean()
-                        improvement_pct = min(20, max(8, baseline_hss * 0.8))
-                        debug_info = None
-                        # Keep using sidebar plateau_days
+                        adjusted_scores.append(adjusted_score)
+                        relative_scores.append(relative_score)
+                    
+                    # Update DataFrame with calculated scores
+                    df['adjusted_score'] = adjusted_scores
+                    df['relative_score'] = relative_scores
+                    
+                    # Update the original list as well
+                    for i, run in enumerate(run_data_list):
+                        run['adjusted_score'] = adjusted_scores[i]
+                        run['relative_score'] = relative_scores[i]
+                    
+                    # ML predictions and adaptation modeling
+                    if ml_model.is_trained:
+                        predictions = ml_model.predict(features_df)
+                        residuals = df['raw_score'].values - predictions
+                        model_used = "ML Model"
+                    else:
+                        # Fallback to statistical model
+                        X = np.arange(len(df)).reshape(-1, 1)
+                        y = clean_run_data_df['raw_score'].values
                         
-                        # Create ML features
-                        features_df = create_ml_features(df)
-                        
-                        # Detect outliers
-                        raw_scores = run_data['raw_score'].tolist()
-                        outliers = detect_outliers(raw_scores, method=outlier_method, threshold=outlier_threshold)
-                        
-                        # Filter out outliers for model training
-                        clean_features_df = features_df[~outliers].copy()
-                        clean_run_data = [run for i, run in enumerate(run_data) if not outliers[i]]
-                        
-                        # Train ML model
-                        ml_model = HeatAdaptationMLModel()
-                        model_performance = ml_model.train_models(clean_features_df)
-                        
-                        # Calculate baseline metrics
-                        threshold = estimate_threshold(clean_run_data['raw_score'].tolist())
-                        
-                        # Calculate adjusted scores and relative scores
-                        for i, run in enumerate(run_data):
-                            multiplier = adjust_multiplier(run['raw_score'], threshold, run['pace_sec'], run['mile_pr_sec'])
-                            run['adjusted_score'] = run['raw_score'] * multiplier
-                            run['relative_score'] = run['raw_score'] / threshold
-                        
-                        # ML predictions and adaptation modeling
-                        if ml_model.is_trained:
-                            predictions = ml_model.predict(features_df)
-                            residuals = np.array(run_data['raw_score'].tolist()) - predictions
-                            model_used = "ML Model"
-                        else:
-                            # Fallback to statistical model
-                            X = np.arange(len(run_data)).reshape(-1, 1)
-                            y = np.array(clean_run_data['raw_score'].tolist())
-                            
-                            if len(clean_run_data) >= 3:
-                                # Use statsmodels for trend analysis
-                                X_sm = sm.add_constant(X[:len(clean_run_data)])
-                                try:
-                                    model = sm.OLS(y, X_sm).fit()
-                                    predictions = model.predict(sm.add_constant(X))
-                                    residuals = np.array(run_data['raw_score'].tolist()) - predictions
-                                    model_used = "Statistical Model"
-                                except:
-                                    predictions = np.full(len(run_data), np.mean(y))
-                                    residuals = np.array(run_data['raw_score'].tolist()) - predictions
-                                    model_used = "Simple Average"
-                            else:
-                                predictions = np.full(len(run_data), np.mean(y))
-                                residuals = np.array(run_data['raw_score'].tolist()) - predictions
+                        if len(clean_run_data_df) >= 3:
+                            # Use statsmodels for trend analysis
+                            X_sm = sm.add_constant(X[:len(clean_run_data_df)])
+                            try:
+                                model = sm.OLS(y, X_sm).fit()
+                                predictions = model.predict(sm.add_constant(X))
+                                residuals = df['raw_score'].values - predictions
+                                model_used = "Statistical Model"
+                            except:
+                                predictions = np.full(len(df), np.mean(y))
+                                residuals = df['raw_score'].values - predictions
                                 model_used = "Simple Average"
-                        
-                        # Calculate improvement percentage
-                        baseline_hss = np.mean(clean_run_data['raw_score'].tolist())
-                        trend_slope = (predictions[-1] - predictions[0]) / len(predictions) if len(predictions) > 1 else 0
-                        
-                        # Create adapted scenarios
-                        adapted_same_runs = []
-                        adapted_dates = []
-                        
-                        for run in run_data:
-                            adapted_score = run['raw_score'] * (1 - improvement_pct / 100)
-                            adapted_same_runs.append(adapted_score)
-                            adapted_dates.append(run['date'] + timedelta(days=plateau_days))
-                        
-                        # Calculate confidence intervals
-                        ci_50_lower, ci_50_upper, ci_80_lower, ci_80_upper, ci_95_lower, ci_95_upper = calculate_confidence_intervals(
-                            np.array(adapted_same_runs), residuals
-                        )
-                        
-                        # Create visualization
-                        dates = [run['date'] for run in run_data]
-                        adjusted_scores = [run['adjusted_score'] for run in run_data]
-                        
-                        fig = create_visualization(
-                            run_data, dates, raw_scores, adjusted_scores, 
-                            adapted_same_runs, adapted_dates, outliers,
-                            improvement_pct, threshold, model_used,
-                            ci_50_lower, ci_50_upper, ci_80_lower, ci_80_upper,
-                            ci_95_lower, ci_95_upper, plateau_days
-                        )
-                        
-                        # Display results
-                        st.subheader("📊 Analysis Results")
-                        
-                        col1, col2, col3, col4 = st.columns(4)
+                        else:
+                            predictions = np.full(len(df), np.mean(y))
+                            residuals = df['raw_score'].values - predictions
+                            model_used = "Simple Average"
+                    
+                    # Calculate improvement percentage using the fixed function
+                    improvement_pct, debug_info = calculate_adaptation_potential(
+                        df, features_df, ml_model, clean_run_data_df
+                    )
+                    
+                    # Apply physiological limits
+                    improvement_pct = apply_physiological_limits(improvement_pct, debug_info=debug_info)
+                    
+                    # Calculate baseline HSS
+                    baseline_hss = clean_run_data_df['raw_score'].mean()
+                    
+                    # Create adapted scenarios
+                    adapted_same_runs = []
+                    adapted_dates = []
+                    
+                    for _, run in df.iterrows():
+                        adapted_score = run['raw_score'] * (1 - improvement_pct / 100)
+                        adapted_same_runs.append(adapted_score)
+                        adapted_dates.append(run['date'] + timedelta(days=plateau_days))
+                    
+                    # Calculate confidence intervals
+                    ci_50_lower, ci_50_upper, ci_80_lower, ci_80_upper, ci_95_lower, ci_95_upper = calculate_confidence_intervals(
+                        np.array(adapted_same_runs), residuals
+                    )
+                    
+                    # Create visualization
+                    dates = df['date'].tolist()
+                    raw_scores = df['raw_score'].tolist()
+                    
+                    fig = create_visualization(
+                        df, dates, raw_scores, adjusted_scores, 
+                        adapted_same_runs, adapted_dates, outliers,
+                        improvement_pct, threshold, model_used,
+                        ci_50_lower, ci_50_upper, ci_80_lower, ci_80_upper,
+                        ci_95_lower, ci_95_upper, plateau_days
+                    )
+                    
+                    # Display results
+                    st.subheader("📊 Analysis Results")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Baseline HSS", f"{baseline_hss:.2f}")
+                    with col2:
+                        st.metric("Threshold", f"{threshold:.2f}")
+                    with col3:
+                        st.metric("Improvement", f"{improvement_pct:.1f}%")
+                    with col4:
+                        st.metric("Outliers", f"{sum(outliers)}/{len(outliers)}")
+                    
+                    # Show the plot
+                    st.pyplot(fig)
+                    
+                    # Model performance metrics
+                    if model_performance:
+                        st.subheader("🤖 Model Performance")
+                        col1, col2, col3 = st.columns(3)
                         with col1:
-                            st.metric("Baseline HSS", f"{baseline_hss:.2f}")
+                            st.metric("R² Score", f"{model_performance['r2']:.3f}")
                         with col2:
-                            st.metric("Threshold", f"{threshold:.2f}")
+                            st.metric("RMSE", f"{model_performance['rmse']:.3f}")
                         with col3:
-                            st.metric("Improvement", f"{improvement_pct:.1f}%")
-                        with col4:
-                            st.metric("Outliers", f"{sum(outliers)}/{len(outliers)}")
-                        
-                        # Show the plot
-                        st.pyplot(fig)
-                        
-                        # Model performance metrics
-                        if model_performance:
-                            st.subheader("🤖 Model Performance")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("R² Score", f"{model_performance['r2']:.3f}")
-                            with col2:
-                                st.metric("RMSE", f"{model_performance['rmse']:.3f}")
-                            with col3:
-                                st.metric("MAE", f"{model_performance['mae']:.3f}")
-                        
-                        # Generate training advice
-                        advice = generate_adaptation_advice(improvement_pct, baseline_hss, plateau_days, run_data)
-                        
-                        # Summary statistics
-                        st.subheader("📈 Summary Statistics")
-                        summary_df = pd.DataFrame({
-                            'Metric': ['Mean HSS', 'Median HSS', 'Std Dev', 'Min HSS', 'Max HSS', 'Range'],
-                            'Current': [
-                                np.mean(raw_scores),
-                                np.median(raw_scores),
-                                np.std(raw_scores),
-                                np.min(raw_scores),
-                                np.max(raw_scores),
-                                np.max(raw_scores) - np.min(raw_scores)
-                            ],
-                            'After Adaptation': [
-                                np.mean(adapted_same_runs),
-                                np.median(adapted_same_runs),
-                                np.std(adapted_same_runs),
-                                np.min(adapted_same_runs),
-                                np.max(adapted_same_runs),
-                                np.max(adapted_same_runs) - np.min(adapted_same_runs)
-                            ]
-                        })
-                        
-                        st.dataframe(summary_df, use_container_width=True)
-                        
-                        # Export options
-                        st.subheader("💾 Export Options")
-                        
-                        # Prepare export data
-                        export_df = pd.DataFrame([
-                            {
-                                'Date': run['date'].strftime('%Y-%m-%d'),
-                                'Temperature': run['temp'],
-                                'Humidity': run['humidity'],
-                                'Pace_Seconds': run['pace_sec'],
-                                'Avg_HR': run['avg_hr'],
-                                'Distance': run['distance'],
-                                'Raw_HSS': run['raw_score'],
-                                'Adjusted_HSS': run['adjusted_score'],
-                                'Relative_HSS': run['relative_score'],
-                                'Outlier': outliers[i],
-                                'Adapted_HSS': adapted_same_runs[i]
-                            } for i, run in enumerate(run_data)
-                        ])
-                        
-                        csv_data = export_df.to_csv(index=False)
-                        st.download_button(
-                            label="📥 Download Results as CSV",
-                            data=csv_data,
-                            file_name=f"heat_adaptation_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
-                            mime="text/csv"
-                        )
-                        
-                    except Exception as e:
-                        st.error(f"Analysis failed: {str(e)}")
-                        st.error("Please check your data and try again.")
+                            st.metric("MAE", f"{model_performance['mae']:.3f}")
+                    
+                    # Generate training advice
+                    advice = generate_adaptation_advice(improvement_pct, baseline_hss, plateau_days, df)
+                    
+                    # Summary statistics
+                    st.subheader("📈 Summary Statistics")
+                    summary_df = pd.DataFrame({
+                        'Metric': ['Mean HSS', 'Median HSS', 'Std Dev', 'Min HSS', 'Max HSS', 'Range'],
+                        'Current': [
+                            np.mean(raw_scores),
+                            np.median(raw_scores),
+                            np.std(raw_scores),
+                            np.min(raw_scores),
+                            np.max(raw_scores),
+                            np.max(raw_scores) - np.min(raw_scores)
+                        ],
+                        'After Adaptation': [
+                            np.mean(adapted_same_runs),
+                            np.median(adapted_same_runs),
+                            np.std(adapted_same_runs),
+                            np.min(adapted_same_runs),
+                            np.max(adapted_same_runs),
+                            np.max(adapted_same_runs) - np.min(adapted_same_runs)
+                        ]
+                    })
+                    
+                    st.dataframe(summary_df, use_container_width=True)
+                    
+                    # Export options
+                    st.subheader("💾 Export Options")
+                    
+                    # Prepare export data
+                    export_df = pd.DataFrame([
+                        {
+                            'Date': run['date'].strftime('%Y-%m-%d'),
+                            'Temperature': run['temp'],
+                            'Humidity': run['humidity'],
+                            'Pace_Seconds': run['pace_sec'],
+                            'Avg_HR': run['avg_hr'],
+                            'Distance': run['distance'],
+                            'Raw_HSS': run['raw_score'],
+                            'Adjusted_HSS': run['adjusted_score'],
+                            'Relative_HSS': run['relative_score'],
+                            'Outlier': outliers[i],
+                            'Adapted_HSS': adapted_same_runs[i]
+                        } for i, run in enumerate(run_data_list)
+                    ])
+                    
+                    csv_data = export_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Results as CSV",
+                        data=csv_data,
+                        file_name=f"heat_adaptation_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Analysis failed: {str(e)}")
+                    st.error("Please check your data and try again.")
+                    # Show the full traceback for debugging
+                    import traceback
+                    st.code(traceback.format_exc())
                     
     elif st.session_state.run_data and len(st.session_state.run_data) == 1:
         st.info("Add at least one more run to perform analysis.")
