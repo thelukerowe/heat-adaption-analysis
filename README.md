@@ -99,7 +99,7 @@ HSS combines multiple factors into a single metric:
 - Distance scaling factor
 
 ## To-do List
-- [ ] Add test scenarios to Streamlit app
+- [x] Add test scenarios to Streamlit app
 - [ ] Clear individual runs that are manually added
 - [ ] Add XGBoost
 - [ ] Improve readability of final analysis visualization
