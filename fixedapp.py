@@ -57,80 +57,6 @@ st.markdown("""
 
 # --- FIXED FUNCTIONS ---
 
-def create_test_scenarios():
-    """Create test data to verify the fixed logic works correctly"""
-    
-    scenarios = [
-        {
-            'name': "Elite Heat-Adapted",
-            'mile_pr': "4:45",  # 285 seconds - elite
-            'runs': [
-                {'temp': 85, 'humidity': 70, 'pace': "5:00", 'hr': 165},  # Only 15 sec slower than PR
-                {'temp': 90, 'humidity': 75, 'pace': "5:05", 'hr': 170},  # 20 sec slower
-                {'temp': 88, 'humidity': 80, 'pace': "5:02", 'hr': 168},  # 17 sec slower
-            ],
-            'expected_improvement': 3,  # Very low - already adapted elite
-            'expected_category': "Elite - Adapted"
-        },
-        {
-            'name': "Elite Heat-Naive", 
-            'mile_pr': "4:45",  # 285 seconds - elite
-            'runs': [
-                {'temp': 85, 'humidity': 70, 'pace': "6:15", 'hr': 180},  # 90 sec slower - very heat naive!
-                {'temp': 90, 'humidity': 75, 'pace': "6:30", 'hr': 185},  # 105 sec slower
-                {'temp': 88, 'humidity': 80, 'pace': "6:20", 'hr': 183},  # 95 sec slower
-            ],
-            'expected_improvement': 7,  # Higher - elite but heat naive
-            'expected_category': "Elite - Naive"
-        },
-        {
-            'name': "Competitive Heat-Adapted",
-            'mile_pr': "5:45",  # 345 seconds - competitive
-            'runs': [
-                {'temp': 85, 'humidity': 70, 'pace': "6:00", 'hr': 165},  # 15 sec slower - well adapted
-                {'temp': 90, 'humidity': 75, 'pace': "6:10", 'hr': 170},  # 25 sec slower
-                {'temp': 88, 'humidity': 80, 'pace': "6:05", 'hr': 168},  # 20 sec slower
-            ],
-            'expected_improvement': 6,  # Low - competitive and adapted
-            'expected_category': "Competitive - Adapted"
-        },
-        {
-            'name': "Competitive Heat-Naive",
-            'mile_pr': "5:45",  # 345 seconds - competitive
-            'runs': [
-                {'temp': 85, 'humidity': 70, 'pace': "7:45", 'hr': 180},  # 120 sec slower - heat naive
-                {'temp': 90, 'humidity': 75, 'pace': "8:00", 'hr': 185},  # 135 sec slower
-                {'temp': 88, 'humidity': 80, 'pace': "7:50", 'hr': 183},  # 125 sec slower
-            ],
-            'expected_improvement': 14,  # High - competitive but heat naive
-            'expected_category': "Competitive - Naive"
-        },
-        {
-            'name': "Recreational Heat-Adapted",
-            'mile_pr': "8:30",  # 510 seconds - recreational
-            'runs': [
-                {'temp': 85, 'humidity': 70, 'pace': "9:00", 'hr': 165},  # 30 sec slower - well adapted
-                {'temp': 90, 'humidity': 75, 'pace': "9:15", 'hr': 170},  # 45 sec slower
-                {'temp': 88, 'humidity': 80, 'pace': "9:05", 'hr': 168},  # 35 sec slower
-            ],
-            'expected_improvement': 12,  # Moderate - recreational but adapted
-            'expected_category': "Recreational - Adapted"
-        },
-        {
-            'name': "Recreational Heat-Naive",
-            'mile_pr': "8:30",  # 510 seconds - recreational  
-            'runs': [
-                {'temp': 85, 'humidity': 70, 'pace': "11:00", 'hr': 180},  # 150 sec slower - very naive
-                {'temp': 90, 'humidity': 75, 'pace': "11:30", 'hr': 185},  # 180 sec slower
-                {'temp': 88, 'humidity': 80, 'pace': "11:15", 'hr': 183},  # 165 sec slower
-            ],
-            'expected_improvement': 23,  # Very high - recreational and heat naive
-            'expected_category': "Recreational - Naive"
-        }
-    ]
-    
-    return scenarios
-
 def pace_to_seconds_fixed(pace_str):
     """Convert pace string to seconds - FIXED"""
     if isinstance(pace_str, str) and ':' in pace_str:
@@ -1311,7 +1237,7 @@ def main():
     else:
         st.info("Add some running data to get started with the analysis!")
     
-    # REPLACE THE TEST SCENARIOS SECTION WITH THIS UPDATED VERSION
+# REPLACE THE TEST SCENARIOS SECTION WITH THIS UPDATED VERSION
 # This fixes the function order issue
 
 # Test scenarios section - FIXED to always be visible
@@ -1328,62 +1254,106 @@ if st.sidebar.button("Load Test Scenarios"):
 if st.session_state.get('show_test_scenarios', False):
     st.header("🧪 Test Scenarios to Verify Fixed Logic")
     
-    # Call the function only when we need it (after it's defined)
-    try:
-        test_scenarios = ()
+    # Define scenarios inline to avoid function order issues
+    test_scenarios = [
+        {
+            'name': "Elite Heat-Adapted",
+            'mile_pr': "4:45",  # 285 seconds - elite
+            'runs': [
+                {'temp': 85, 'humidity': 70, 'pace': "5:00", 'hr': 165},  # Only 15 sec slower than PR
+                {'temp': 90, 'humidity': 75, 'pace': "5:05", 'hr': 170},  # 20 sec slower
+                {'temp': 88, 'humidity': 80, 'pace': "5:02", 'hr': 168},  # 17 sec slower
+            ],
+            'expected_improvement': 3,  # Very low - already adapted elite
+            'expected_category': "Elite - Adapted"
+        },
+        {
+            'name': "Elite Heat-Naive", 
+            'mile_pr': "4:45",  # 285 seconds - elite
+            'runs': [
+                {'temp': 85, 'humidity': 70, 'pace': "6:15", 'hr': 180},  # 90 sec slower - very heat naive!
+                {'temp': 90, 'humidity': 75, 'pace': "6:30", 'hr': 185},  # 105 sec slower
+                {'temp': 88, 'humidity': 80, 'pace': "6:20", 'hr': 183},  # 95 sec slower
+            ],
+            'expected_improvement': 7,  # Higher - elite but heat naive
+            'expected_category': "Elite - Naive"
+        },
+        {
+            'name': "Competitive Heat-Adapted",
+            'mile_pr': "5:45",  # 345 seconds - competitive
+            'runs': [
+                {'temp': 85, 'humidity': 70, 'pace': "6:00", 'hr': 165},  # 15 sec slower - well adapted
+                {'temp': 90, 'humidity': 75, 'pace': "6:10", 'hr': 170},  # 25 sec slower
+                {'temp': 88, 'humidity': 80, 'pace': "6:05", 'hr': 168},  # 20 sec slower
+            ],
+            'expected_improvement': 6,  # Low - competitive and adapted
+            'expected_category': "Competitive - Adapted"
+        },
+        {
+            'name': "Recreational Heat-Naive",
+            'mile_pr': "8:30",  # 510 seconds - recreational  
+            'runs': [
+                {'temp': 85, 'humidity': 70, 'pace': "11:00", 'hr': 180},  # 150 sec slower - very naive
+                {'temp': 90, 'humidity': 75, 'pace': "11:30", 'hr': 185},  # 180 sec slower
+                {'temp': 88, 'humidity': 80, 'pace': "11:15", 'hr': 183},  # 165 sec slower
+            ],
+            'expected_improvement': 23,  # Very high - recreational and heat naive
+            'expected_category': "Recreational - Naive"
+        }
+    ]
+    
+    selected_scenario = st.selectbox(
+        "Choose a test scenario:", 
+        [s['name'] for s in test_scenarios]
+    )
+    
+    scenario = next(s for s in test_scenarios if s['name'] == selected_scenario)
+    
+    # Show scenario details
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Mile PR:** {scenario['mile_pr']}")
+        st.write(f"**Expected Category:** {scenario['expected_category']}")
+    with col2:
+        st.write(f"**Expected Improvement:** {scenario['expected_improvement']}%")
+        st.write(f"**Number of Runs:** {len(scenario['runs'])}")
+    
+    if st.button(f"Load {scenario['name']} Data", type="primary"):
+        st.session_state.run_data = []
+        mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
         
-        selected_scenario = st.selectbox(
-            "Choose a test scenario:", 
-            [s['name'] for s in test_scenarios]
-        )
-        
-        scenario = next(s for s in test_scenarios if s['name'] == selected_scenario)
-        
-        # Show scenario details
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**Mile PR:** {scenario['mile_pr']}")
-            st.write(f"**Expected Category:** {scenario['expected_category']}")
-        with col2:
-            st.write(f"**Expected Improvement:** {scenario['expected_improvement']}%")
-            st.write(f"**Number of Runs:** {len(scenario['runs'])}")
-        
-        if st.button(f"Load {scenario['name']} Data", type="primary"):
-            st.session_state.run_data = []
-            mile_pr_sec = pace_to_seconds_fixed(scenario['mile_pr'])
+        for i, run_data in enumerate(scenario['runs']):
+            date_obj = datetime.now() - timedelta(days=len(scenario['runs']) - i)
+            pace_sec = pace_to_seconds_fixed(run_data['pace'])
             
-            for i, run_data in enumerate(scenario['runs']):
-                date_obj = datetime.now() - timedelta(days=len(scenario['runs']) - i)
-                pace_sec = pace_to_seconds_fixed(run_data['pace'])
-                
-                raw_score = heat_score(
-                    run_data['temp'], run_data['humidity'], 
-                    pace_sec, run_data['hr'], max_hr_global, 
-                    3.1, multiplier=1.0
-                )
-                
-                new_run = {
-                    'date': date_obj,
-                    'temp': run_data['temp'],
-                    'humidity': run_data['humidity'],
-                    'pace_sec': pace_sec,
-                    'avg_hr': run_data['hr'],
-                    'max_hr': max_hr_global,
-                    'distance': 3.1,
-                    'raw_score': raw_score,
-                    'adjusted_score': None,
-                    'relative_score': None,
-                    'mile_pr_sec': mile_pr_sec
-                }
-                
-                st.session_state.run_data.append(new_run)
+            raw_score = heat_score(
+                run_data['temp'], run_data['humidity'], 
+                pace_sec, run_data['hr'], max_hr_global, 
+                3.1, multiplier=1.0
+            )
             
-            st.success(f"✅ Loaded {scenario['name']} test data!")
-            st.info(f"**Expected:** {scenario['expected_improvement']}% improvement, Category: {scenario['expected_category']}")
+            new_run = {
+                'date': date_obj,
+                'temp': run_data['temp'],
+                'humidity': run_data['humidity'],
+                'pace_sec': pace_sec,
+                'avg_hr': run_data['hr'],
+                'max_hr': max_hr_global,
+                'distance': 3.1,
+                'raw_score': raw_score,
+                'adjusted_score': None,
+                'relative_score': None,
+                'mile_pr_sec': mile_pr_sec
+            }
             
-            # Hide test scenarios after loading and rerun
-            st.session_state.show_test_scenarios = False
-            st.rerun()
+            st.session_state.run_data.append(new_run)
+        
+        st.success(f"✅ Loaded {scenario['name']} test data!")
+        st.info(f"**Expected:** {scenario['expected_improvement']}% improvement, Category: {scenario['expected_category']}")
+        
+        # Hide test scenarios after loading and rerun
+        st.session_state.show_test_scenarios = False
+        st.rerun()
             
     except NameError:
         st.error("🔧 Test scenarios function not found. Make sure () is defined in your code.")
