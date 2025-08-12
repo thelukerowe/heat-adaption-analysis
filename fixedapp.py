@@ -1328,7 +1328,7 @@ if st.session_state.get('show_test_scenarios', False):
             
             raw_score = heat_score(
                 run_data['temp'], run_data['humidity'], 
-                pace_sec, run_data['hr'], max_hr_global, 
+                pace_sec, run_data['hr'], 190,  # Use a default max HR, 
                 3.1, multiplier=1.0
             )
             
