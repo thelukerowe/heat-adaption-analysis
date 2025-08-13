@@ -8,7 +8,7 @@ This tool analyzes running performance in hot conditions and uses machine learni
 
 ## Features
 
-- **ML-Enhanced Analysis**: Uses Random Forest and Gradient Boosting models for accurate predictions
+- **ML-Enhanced Analysis**: Uses Random Forest, Gradient Boosting, and XGBoost models for accurate predictions
 - **Heat Strain Score (HSS)**: Comprehensive metric combining temperature, humidity, pace, heart rate, and distance
 - **Adaptation Prediction**: Predicts performance improvement after heat adaptation training
 - **Confidence Intervals**: Statistical confidence ranges for predictions
